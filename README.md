@@ -10,7 +10,7 @@ Various bioinformatic utilities
 General purpose utility to manipulate FASTA formatted files and generate statistics.  
 
 ### fasta2chunks
-extract a chunk n of N chunks.  The chunks are reproducible for consistent processing.  
+extract chunk n of N chunks.  The chunks are reproducible for consistent processing.  
 
 ### fasta2tab
 convert FASTA to tab delimited sequence table.    
