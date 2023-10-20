@@ -1,0 +1,247 @@
+#!/usr/bin/env python3
+# ejr: 2023-02-22
+# lmd: 2023-06-23
+# General purpose fasta manipulation suite
+
+import sys
+import argparse
+import signal
+
+def main():
+    get_args()
+
+###############################################################################
+### Printout FASTA Statistics
+###############################################################################
+def fasta_stats(args):
+    fasta = read_fasta(args.file)
+
+    num_bases = 0
+    num_seqs = 0 
+    total_gc = 0
+    total_at = 0
+    total_n = 0
+    longest_seq = 0
+    shortest_seq = float('inf')
+    seq_lengths = []
+
+    for value in fasta.values():
+        seq = value.upper()
+        slen = len(seq)
+        seq_lengths.append(slen)
+        total_gc += seq.count('G') + seq.count('C')
+        total_at += seq.count('A') + seq.count('T')
+        total_n  += seq.count('N')
+        # add lengths together for number of bases
+        num_bases += slen
+        # count number of sequences
+        num_seqs += 1
+
+        # track longest and shortest sequence
+        if slen < shortest_seq:
+            shortest_seq = slen
+        if slen > longest_seq:
+            longest_seq = slen
+
+    average_length = num_bases // num_seqs
+    percent_gc = total_gc / (total_gc + total_at)
+    percent_n = total_n / num_bases
+    percent_lower = sum(1 for c in ''.join(fasta.values()) if c.islower()) / num_bases
+
+    fifty = num_bases * .5
+    ninety = num_bases *.9
+
+    running_total = 0
+    n50 = 0
+    n90 = 0
+    for length in sorted(seq_lengths, reverse=True):
+        running_total += length
+        if running_total < fifty:
+            n50 = length
+        if running_total < ninety:
+            n90 = length
+
+    output = """
+|                      |            |
+|:-------------------- |-----------:|
+| Number of Sequences: | {: >10,} |
+| Total Length:        | {: >10,} |
+| Average Length:      | {: >10,} |
+| Longest Sequence:    | {: >10,} |
+| Shortest Sequence:   | {: >10,} |
+| Percent GC:          | {: >10.0%} |
+| Percent N:           | {: >10.0%} |
+| Percent Lower:       | {: >10.0%} |
+| N50:                 | {: >10,} |
+| N90:                 | {: >10,} |
+"""
+    print(output.format(
+    num_seqs,
+    num_bases,
+    average_length,
+    longest_seq,
+    shortest_seq,
+    percent_gc,
+    percent_n,
+    percent_lower,
+    n50,
+    n90))
+
+###############################################################################
+### Filter FASTA File by length and gc content
+###############################################################################
+def filter_fasta(args):
+    fasta = read_fasta(args.file)
+    fasta_out = {}
+
+    for header, seq in fasta.items():
+        s_gc = calc_gc(seq) * 100
+        s_len = len(seq)
+        if args.gc_min <= s_gc <= args.gc_max and args.len_min <= s_len <= args.len_max:
+            fasta_out[header] = seq
+    
+    print_fasta(fasta_out)
+
+###############################################################################
+### Read FASTA filehandle into dictionary
+###############################################################################
+def read_fasta(fh):
+    fasta = {}
+
+    with fh as file:
+        header = ""
+        for line in file:
+            line = line.rstrip()
+            if line.startswith(">"):
+                header = line[1:]
+                fasta[header] = []
+            else:
+                fasta[header].append(line)
+    
+    for header, seq_lines in fasta.items():
+        fasta[header] = ''.join(seq_lines)
+
+    return fasta
+
+###############################################################################
+### Add newlines every 80 characters for FASTA formatting
+###############################################################################
+def insert_newlines(string, every=80):
+    lines = (string[i:i+every] for i in range(0, len(string), every))
+    return '\n'.join(lines)
+
+###############################################################################
+# Reverse Complement Sequence
+###############################################################################
+def reverse_complement(seq):
+    bases = str.maketrans('AGCTagct','TCGAtcga')
+    return seq.translate(bases)[::-1]
+
+###############################################################################
+# Print FASTA Dictionary as FASTA to STDOUT
+###############################################################################
+def print_fasta(fasta):
+    for header, sequence in fasta.items():
+        print(">", header, sep="")
+        print(insert_newlines(sequence))
+
+###############################################################################
+# calculate GC content of sequence - returns percentage in decimal (e.g. 0.21)
+###############################################################################    
+def calc_gc(seq):
+    useq = seq.upper()
+
+    perc_gc = 0
+    if (useq.count('G') + useq.count('C') + useq.count('A') + useq.count('T') > 0): 
+        perc_gc = (useq.count('G') + useq.count('C')) / (useq.count('G') + useq.count('C') + useq.count('A') + useq.count('T'))
+    return perc_gc
+
+###############################################################################
+# Print table from FASTA files
+###############################################################################
+def fasta2table(args):
+    fasta = read_fasta(args.file)
+    if args.gc:
+        print_gc_table(fasta)
+    elif args.len:
+        print_lengths_table(fasta)
+    else:
+        print_seq_table(fasta)
+
+###############################################################################
+# Print table of sequences
+###############################################################################
+def print_seq_table(fasta):
+    print("seq_id\tseq")
+
+    for header, sequence in fasta.items():
+        seq = sequence.upper()
+        header = header[1:]
+        print(header, "\t", seq)
+
+###############################################################################
+# Print table of sequence lengths
+###############################################################################
+def print_lengths_table(fasta):
+    print("seq_id\tseq_length")
+
+    for header, sequence in fasta.items():
+        seq_length = len(sequence.upper())
+        print(header, "\t", seq_length)
+
+###############################################################################
+# Print table of GC content
+###############################################################################
+def print_gc_table(fasta):
+    print("seq_id\tseq_gc")
+
+    for header, sequence in fasta.items():
+        seq = sequence.upper()
+
+        gc_content = (seq.count('G') + seq.count('C')) / (seq.count('G') + seq.count('C') + seq.count('A') + seq.count('T')) * 100
+        print(header, "\t%0.2f" % gc_content)
+
+###############################################################################
+### Get command-line arguments using argparse
+###############################################################################
+def get_args():
+    parser = argparse.ArgumentParser(description="Manipulate FASTA Files")
+    subparsers = parser.add_subparsers(help='sub-command help')
+    subparsers.required = True
+
+    # create the parser for the "stats" command
+    parser_stats = subparsers.add_parser('stats', help='stats help')
+    parser_stats.add_argument('--file', type=argparse.FileType('r'), default=sys.stdin, 
+                              help='Input FASTA - defaults to STDIN')
+    parser_stats.set_defaults(func=fasta_stats)
+
+    # create the parser for the "filter" command
+    parser_filter = subparsers.add_parser('filter', help='filter help')
+    parser_filter.add_argument('--file', type=argparse.FileType('r'), default=sys.stdin, 
+                               help='Input FASTA - defaults to STDIN')
+    parser_filter.add_argument('--len_min', type=int, default=0,
+                               help='Minimum sequence length to retain')
+    parser_filter.add_argument('--len_max', type=int, default=1000000000,
+                               help='Maximum sequence length to retain')
+    parser_filter.add_argument('--gc_min', type=int, default=0,
+                               help='Minimum sequence GC percentage to retain (20 = .20)')
+    parser_filter.add_argument('--gc_max', type=int, default=100,
+                               help='Maximum sequence GC percentage to retain (60 = .60)')
+    parser_filter.set_defaults(func=filter_fasta)
+
+    # create the parser for the "table" command
+    parser_table = subparsers.add_parser('table', help='table help')
+    parser_table.add_argument('--file', type=argparse.FileType('r'), default=sys.stdin, 
+                              help='Input FASTA - defaults to STDIN')
+    table_group = parser_table.add_mutually_exclusive_group()
+    table_group.add_argument('--gc', help='Output Table of GC Content', action="store_true")
+    table_group.add_argument('--len', help='Output Table of Sequence Length', action="store_true")
+    table_group.add_argument('--seq', help='Output Table of Sequences', action="store_true")
+    parser_table.set_defaults(func=fasta2table)
+
+    args = parser.parse_args()
+    args.func(args)
+
+if __name__ == "__main__":
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+    get_args()
