@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+# fasta2chunks
+# retrieve a chunk of sequences from a FASTA file
+# usage: fasta2chunks -n <number of chunks> -c <chunk number> -f <FASTA file>
+# slurm usage: fasta2chunks -c ${SLURM_ARRAY_TASK_ID} -n ${SLURM_ARRAY_TASK_MAX} -f fasta.aa > fasta_${SLURM_ARRAY_TASK_ID}_of_${SLURM_ARRAY_TASK_MAX}.faa
+
+# ejr: 2023-06-01
+# lmd: 2023-07-14
+import fileinput
+import signal
+import argparse
+
+###############################################################################
+### MAIN 
+###############################################################################
+def main():
+    args = get_args()
+    # verify arguments
+    if (args.n < 1):
+        print("Number of chunks must be greater than 0")
+        exit(1)
+
+
+    fh = fileinput.input()
+    fasta = read_fasta(args.f)  # FASTA dictionary with key as seq number
+    print_seq(fasta, args.n, args.c)
+
+###############################################################################
+### Read FASTA filehandle into dictionary with sequence number as key
+###############################################################################
+def read_fasta(filename):
+    header = ""
+    fasta = {}
+
+    i = 0
+    for line in open(filename, 'r'):
+        line = line.rstrip()
+        # starts with handles blank lines better than line[0]
+        if (line.startswith(">")):
+            i = i + 1
+            fasta[i] = []
+            fasta[i].append(line[1:])
+            fasta[i].append("\t")
+        else:
+            fasta[i].append(line)
+    # append is more efficient that string concatenation
+    for i in range(1,len(fasta) + 1):
+        fasta[i] = ''.join(fasta[i])
+
+    return fasta
+
+###############################################################################
+# Print FASTA Dictionary as FASTA to STDOUT
+###############################################################################
+def print_seq(fasta, num_chunks, which_chunk):
+
+    # get the number of sequences in the file
+    num_seqs = len(fasta)
+    chunk_size = int(num_seqs / num_chunks)
+    
+    # get the start and end sequence numbers for the chunk
+    start_seq = (which_chunk - 1) * chunk_size + 1
+    
+    end_seq = start_seq + chunk_size - 1
+    if (end_seq > num_seqs):
+        end_seq = num_seqs
+
+    # print the chunk
+    for i in range(start_seq, end_seq + 1):
+        # print the sequence
+        seq = fasta[i]
+        seqlist = []
+        seqlist = seq.split("\t") 
+        print(">", seqlist[0], sep="")
+        print(insert_newlines(seqlist[1]))
+
+###############################################################################
+### Add newlines every 80 characters for FASTA formatting
+###############################################################################
+def insert_newlines(string, every=80):
+    lines = []
+
+    for i in range(0, len(string), every):
+        lines.append(string[i:i+every])
+
+    return '\n'.join(lines)
+
+###############################################################################
+### Get command-line arguments using argparse
+###############################################################################
+def get_args():
+    parser = argparse.ArgumentParser(description="Retrieve chunk c of n chunks of sequences from FASTA")
+    parser.add_argument('-n', type = int, default = '1', help = 'Number of chunks, ${SLURM_ARRAY_TASK_MAX}')
+    parser.add_argument('-c', type = int, default = '1', help = 'Which chunk, 1 = first in file, ${SLURM_ARRAY_TASK_ID}')
+    parser.add_argument('-f', type = str, help = 'Input FASTA', required = True)
+    args = parser.parse_args()
+
+    return args
+
+###############################################################################
+### RUN MAIN 
+###############################################################################
+if __name__ == "__main__":
+    # this catches sigpipe errors so you don't get an error message if you tail of head output
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+    main()
