@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+# ejr: 2023-06-23
+# lmd: 2023-06-23
+# Histogram of GC content and sequence lengths from FASTA file
+# separated from fastatools because of matplotlib dependency
+
+import sys
+import argparse
+import signal
+import matplotlib.pyplot as plt
+
+def main():
+    args = get_args()
+    fasta = read_fasta(args.file)
+    if args.gc:
+        gc_histogram(fasta)
+    elif args.len:
+        length_histogram(fasta)   
+
+###############################################################################
+### Read FASTA filehandle into dictionary
+###############################################################################
+def read_fasta(fh):
+    header = ""
+    fasta = {}
+
+    for line in fh:
+        line = line.rstrip()
+        # starts with handles blank lines better than line[0]
+        if (line.startswith(">")):
+            header = line[1:]
+            fasta[header] = []
+        else:
+            fasta[header].append(line)
+    # append is more efficient that string concatenation
+    for header in fasta:
+        fasta[header] = ''.join(fasta[header])
+
+    return fasta
+
+###############################################################################
+# GC histogram
+###############################################################################
+def gc_histogram(fasta):
+
+    plot_list = []
+    # gc
+    for header in fasta:
+        seq = fasta[header].upper()
+        gc = (seq.count('G') + seq.count('C')) / (seq.count('G') + seq.count('C') + seq.count('A') + seq.count('T')) * 100
+        plot_list.append(gc)
+
+    n_bins = 101
+ 
+    #   Creating histogram
+    fig, axs = plt.subplots(1, 1,
+                        figsize =(10, 7),
+                        tight_layout = True)
+ 
+    axs.hist(plot_list, bins = n_bins)
+    plt.xlabel("%GC")
+    plt.ylabel("# sequences")
+    plt.title("GC Content")
+    plt.xlim(0,100)
+ 
+    # Show plot
+    plt.savefig("gc_histogram.png")
+
+ ###############################################################################
+# Sequence lengths histogram
+###############################################################################
+def length_histogram(fasta):
+
+    plot_list = []
+    # gc
+    for seq in fasta.values():
+        plot_list.append(len(seq))
+
+    max_len = max(plot_list)
+    min_len = min(plot_list)
+    n_bins = 100
+ 
+    #   Creating histogram
+    fig, axs = plt.subplots(1, 1,
+                        figsize =(10, 7),
+                        tight_layout = True)
+ 
+    axs.hist(plot_list, bins = n_bins)
+    plt.xlabel("length")
+    plt.ylabel("# sequences")
+    plt.title("Sequence Lengths")
+    plt.xlim(min_len,max_len)
+ 
+    # Show plot
+    plt.savefig("length_histogram.png")   
+
+###############################################################################
+### Get command-line arguments using argparse
+###############################################################################
+def get_args():
+    parser = argparse.ArgumentParser(description="%GC and length histograms from FASTA file")
+    parser.add_argument('--file', type = argparse.FileType('r'), default = sys.stdin, 
+        help = 'Input FASTA - defaults to STDIN')
+    parser.add_argument('--gc',  help = 'Output Table of GC Content', action="store_true")
+    parser.add_argument('--len', help = 'Output Table of Sequence Length', action="store_true")
+
+    args = parser.parse_args()
+    return args
+
+###############################################################################
+# Run MAIN
+###############################################################################
+if __name__ == "__main__":
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+    main()

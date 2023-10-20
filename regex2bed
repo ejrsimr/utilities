@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+# fasta_regex
+# search through fasta file for regular expression and output either a bed file or fasta file
+# ejr: 2022-09-27
+# lmd: 2023-02-11
+
+import sys
+import argparse
+import signal
+from re import finditer
+
+###############################################################################
+### MAIN 
+###############################################################################
+def main():
+    args = get_args()
+    fasta = read_fasta(args.file)
+    bed = grep_regex(fasta, args.regex)
+    print_bed(bed)
+
+###############################################################################
+### Get command-line arguments using argparse
+###############################################################################
+def get_args():
+    parser = argparse.ArgumentParser(description="Grep sequence from FASTA")
+    # file defaults to stdin
+    parser.add_argument('--file', type = argparse.FileType('r'), default = sys.stdin, help = 'Input FASTA - defaults to STDIN')
+    parser.add_argument('--regex', type = str, default = '0', help = 'Regular expression to search for')
+    args = parser.parse_args()
+
+    return args
+
+###############################################################################
+### GREP FASTA for REGEX - save into BED dictionary
+###############################################################################
+def grep_regex(fasta, regex):
+    bed = {}
+    for header in fasta:
+        seqlen = len(fasta[header])
+        # forward matches
+        for match in finditer(regex, fasta[header]):
+            name = header + ":" + str(match.start()) + "-" + str(match.end()) + ":+"
+            bed[name] = {}
+            bed[name]['start'] = str(match.start())
+            bed[name]['end'] = str(match.end())
+            bed[name]['chr'] = header
+            bed[name]['strand'] = "+"
+            bed[name]['score'] = "0"
+
+        # reverse complement matches
+        rc = reverse_complement(fasta[header])
+        for match in finditer(regex, rc):
+            name = header + ":" + str(seqlen - match.end()) + "-" + str(seqlen - match.start()) + ":-"
+            bed[name] = {}
+            bed[name]['start'] = str(seqlen - match.end())
+            bed[name]['end'] = str(seqlen - match.start())
+            bed[name]['chr'] = header
+            bed[name]['strand'] = "-"
+            bed[name]['score'] = "0"
+
+    return(bed)
+
+###############################################################################
+### Read FASTA filehandle into dictionary
+###############################################################################
+def read_fasta(fh):
+    header = ""
+    fasta = {}
+
+    for line in fh:
+        line = line.rstrip()
+        # starts with handles blank lines better than line[0]
+        if (line.startswith(">")):
+            header = line[1:]
+            fasta[header] = []
+        else:
+            fasta[header].append(line)
+    # append is more efficient that string concatenation
+    for header in fasta:
+        fasta[header] = ''.join(fasta[header])
+
+    return fasta
+
+###############################################################################
+### Print BED Dictionary as BED to STDOUT
+###############################################################################
+def print_bed(bed): 
+    for name in bed:
+        print("\t".join([bed[name]['chr'], bed[name]['start'], bed[name]['end'], name, bed[name]['score'], bed[name]['strand']]))
+
+###############################################################################
+# Reverse Complement Sequence
+###############################################################################
+def reverse_complement(seq):
+    # complement sequence
+    bases = str.maketrans('AGCTagct','TCGAtcga')
+    # reverse sequences; return
+    return seq.translate(bases)[::-1]
+
+###############################################################################
+### RUN MAIN 
+###############################################################################
+if __name__ == "__main__":
+    # this catches sigpipe errors so you don't get an error message if you tail of head output
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+    main()
