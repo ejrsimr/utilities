@@ -6,6 +6,9 @@
 
 import sys
 
+# weights of amino acids.  
+# * is a stop codon as set to zero just in case it is in the file
+# X is an unknown amino acid and is set to 110 Da as average
 aa2mw = {
 "A":	89.1,
 "R":	174.2,
@@ -27,7 +30,7 @@ aa2mw = {
 "W":	204.2,
 "Y":	181.2,
 "V":	117.1,
-"X":	0,
+"X":	110,
 "*":    0
 }
 
