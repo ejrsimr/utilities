@@ -87,11 +87,29 @@ def fasta_stats(args):
     n90))
 
 ###############################################################################
+### load exclude file into set
+###############################################################################
+def exclude2set(fh):
+    exclude = set()
+
+    with fh as file:
+        for line in file:
+            line = line.rstrip()
+            # exclude comments
+            if not line.startswith("#"):
+                exclude.add(line)
+
+    return exclude
+
+###############################################################################
 ### Filter FASTA File by length and gc content
 ###############################################################################
 def filter_fasta(args):
     fasta = read_fasta(args.file)
     fasta_out = {}
+
+    if args.exclude:
+        excludes = exclude2set(args.exclude)
 
     for header, seq in fasta.items():
         s_gc = calc_gc(seq) * 100
@@ -99,6 +117,10 @@ def filter_fasta(args):
         if args.gc_min <= s_gc <= args.gc_max and args.len_min <= s_len <= args.len_max:
             fasta_out[header] = seq
     
+        if args.exclude:
+            if header in excludes:
+                del fasta_out[header]
+
     print_fasta(fasta_out)
 
 ###############################################################################
@@ -226,6 +248,8 @@ def get_args():
                                help='Minimum sequence GC percentage to retain (20 = .20)')
     parser_filter.add_argument('--gc_max', type=int, default=100,
                                help='Maximum sequence GC percentage to retain (60 = .60)')
+    parser_filter.add_argument('--exclude', type=argparse.FileType('r'),
+                               help='exclude sequences with names in this file')                       
     parser_filter.set_defaults(func=filter_fasta)
 
     # create the parser for the "table" command
