@@ -1,0 +1,43 @@
+#!/usr/bin/env python3
+# ejr: 2024-02-27
+# fastq2tab
+# Convert fastq to tab-delimited table
+# Usage: fastq2tab <fastq file> or accept input from stdin
+
+import sys
+import argparse
+import signal
+
+
+def main():
+
+    # Open input file
+    args = parse_args()
+    if args.fastq:
+        f = open(args.fastq)
+    else:
+        f = sys.stdin
+    
+    # Read file line by line
+    while True:
+         # Read 4 lines at a time
+        header = f.readline().strip()
+        if not header:
+            break
+        seq = f.readline().strip()
+        plus = f.readline().strip()
+        qual = f.readline().strip()
+
+        # Print tab-delimited output
+        print(f"{header}\t{seq}\t{qual}")
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Convert fastq to tab-delimited table")
+    # if no arguments are given, read from stdin
+    parser.add_argument("fastq", help="fastq file to convert", nargs="?")
+    return parser.parse_args()
+
+if __name__ == "__main__":
+    # this catches sigpipe errors so you don't get an error message if you tail of head output
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+    main()
