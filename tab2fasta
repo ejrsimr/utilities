@@ -11,29 +11,14 @@ import signal
 ###############################################################################
 def main():
     fh = fileinput.input()
-    fasta = read_seqtable(fh)
-    print_fasta(fasta)
-
-###############################################################################
-### Read seqtable filehandle into dictionary - seqtable = header\tseq
-###############################################################################
-def read_seqtable(fh):
-    fasta = {}
 
     for line in fh:
         line = line.rstrip()
         fields = line.split("\t")
-        fasta[fields[0]] = fields[1]
-
-    return fasta
-
-###############################################################################
-# Print FASTA Dictionary as FASTA to STDOUT
-###############################################################################
-def print_fasta(fasta):
-    for header in fasta:
-        print(">", header, sep="")
-        print(insert_newlines(fasta[header]))
+        print(">", fields[0], sep="")
+        print(insert_newlines(fields[1]))
+    
+    exit(0)
 
 ###############################################################################
 ### Add newlines every 80 characters for FASTA formatting

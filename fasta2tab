@@ -11,36 +11,31 @@ import signal
 ###############################################################################
 def main():
     fh = fileinput.input()
-    fasta = read_fasta(fh)
-    print_seqtable(fasta)
 
-###############################################################################
-### Print FASTA Dictionary as seqtable to STDOUT
-###############################################################################
-def print_seqtable(fasta):
-    for header in fasta:
-        print(header, fasta[header], sep="\t")
-
-###############################################################################
-### Read FASTA filehandle into dictionary
-###############################################################################
-def read_fasta(fh):
+    # this is a bit ugly, but I want it to write line at a time for better 
+    # memory use.
+    seq = []
     header = ""
-    fasta = {}
 
     for line in fh:
         line = line.rstrip()
         # starts with handles blank lines better than line[0]
         if (line.startswith(">")):
+            # if header is not empty (first time through loop) print it
+            if header:
+                sequence = ''.join(seq)
+                print(header, sequence, sep="\t")
+                seq = []
+                header = ""
             header = line[1:]
-            fasta[header] = []
         else:
-            fasta[header].append(line)
-    # append is more efficient that string concatenation
-    for header in fasta:
-        fasta[header] = ''.join(fasta[header])
+            seq.append(line)
 
-    return fasta
+        # print last sequence
+    sequence = ''.join(seq)
+    print(header, sequence, sep="\t")
+
+    exit(0)
 
 ###############################################################################
 ### RUN MAIN 
